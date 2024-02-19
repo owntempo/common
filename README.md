@@ -24,6 +24,13 @@ Item *items;
 
 array_push(items, my_item);
 hash_add(&hash, hash_string("Something"), array_size(items)-1);
+
+// Lookup
+uint64_t value = hash_lookup(&hash, hash_string("Blah"));
+if (value == HASH_UNUSED)
+	printf("No value is mapped to the corresponding key.\n");
+else
+	printf("Value found.\n");
 ```
 
 ### TODO
