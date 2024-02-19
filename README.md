@@ -26,6 +26,17 @@ array_push(items, my_item);
 hash_add(&hash, hash_string("Something"), array_size(items)-1);
 ```
 
+## Dependencies
+
+```C
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include <string.h>
+#include <stdint.h>
+#include <assert.h>
+```
+
 ## Credits
 
 Most of the techniques used here are popularized (possibly invented?) by [Sean Barrett](http://nothings.org/).
