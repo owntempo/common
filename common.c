@@ -19,40 +19,42 @@ die(const char *fmt, ...) {
 	exit(EXIT_FAILURE);
 }
 
-void *emalloc(size_t size) {
+void *emalloc(uint64_t size) {
 	void *p = malloc(size);
 	if (!p) die("malloc:");
 	return p;
 }
 
-void *ecalloc(size_t size) {
+void *ecalloc(uint64_t size) {
 	void *p = calloc(1, size);
 	if (!p) die("calloc:");
 	return p;
 }
 
-void *erealloc(void *old, size_t size) {
+void *erealloc(void *old, uint64_t size) {
 	void *p = realloc(old, size);
 	if (!p) die("realloc:");
 	return p;
 }
 
+// NOTE(gaurang): Dynamic array
+
 typedef struct Array_Header {
-	size_t capacity;
-	size_t size;
-	unsigned char items[1];
+	uint64_t capacity;
+	uint64_t size;
+	uint8_t items[1];
 } Array_Header;
 
-#define array_header(a) ((Array_Header *)((unsigned char *)(a) - offsetof(Array_Header, items)))
+#define array_header(a) ((Array_Header *)((uint8_t *)(a) - offsetof(Array_Header, items)))
 #define array_size(a) ((a) ? array_header(a)->size : 0)
 #define array_capacity(a) ((a) ? array_header(a)->capacity : 0)
 #define array_push(a, item) (array_full(a) ? (a) = array_grow(a, sizeof(*a)) : 0, a[array_header(a)->size++] = item)
 #define array_full(a) (array_size(a) == array_capacity(a))
 #define array_free(a) (free(array_header(a)), (a) = 0)
 
-void *array_grow(void *array, size_t item_size) {
+void *array_grow(void *array, uint64_t item_size) {
 	Array_Header *header = array ? array_header(array) : 0;
-	size_t new_capacity = MAX(1, 2*array_capacity(array));
+	uint64_t new_capacity = MAX(1, 2*array_capacity(array));
 	header = erealloc(header, new_capacity*item_size + offsetof(Array_Header, items));
 	header->capacity = new_capacity;
 	header->size = array ? header->size : 0;
@@ -77,4 +79,82 @@ void array_test(void) {
 	array_free(a);
 	assert(a == 0);
 	assert(array_size(a) == 0);
+}
+
+// NOTE(gaurang): Hash Tables
+
+const uint64_t HASH_UNUSED = 0xffffffffffffffffULL;
+typedef struct Hash
+{
+	uint32_t num_buckets;
+	uint32_t used_buckets;
+	uint64_t *keys;
+	uint64_t *values;
+} Hash;
+
+uint64_t hash_lookup(Hash *h, uint64_t k) {
+	uint32_t i = k % h->num_buckets;
+	while (h->keys[i] != k && h->keys[i] != HASH_UNUSED)
+		i = (i + 1) % h->num_buckets;
+	return h->keys[i] == HASH_UNUSED ? HASH_UNUSED : h->values[i];
+}
+
+void hash_free(Hash *h) {
+	free(h->keys);
+	free(h->values);
+	*h = (Hash) { 0 };
+}
+
+void hash_add(Hash *h, uint64_t k, uint64_t v);
+void hash_grow(Hash *h, uint64_t new_num_buckets) {
+	if (new_num_buckets < 16) new_num_buckets = 16;
+
+	Hash new_hash = {
+		.keys = emalloc(new_num_buckets * sizeof(uint64_t)),
+		.values = emalloc(new_num_buckets * sizeof(uint64_t)),
+		.num_buckets = new_num_buckets,
+	};
+	memset(new_hash.keys, 0xff, sizeof(*new_hash.keys) * new_hash.num_buckets);
+
+	for (uint32_t i = 0; i < h->num_buckets; i++)
+		if (h->keys[i] != HASH_UNUSED)
+			hash_add(&new_hash, h->keys[i], h->values[i]);
+
+	hash_free(h);
+	*h = new_hash;
+}
+
+void hash_add(Hash *h, uint64_t k, uint64_t v) {
+	assert(k != HASH_UNUSED);
+	if (2*h->used_buckets >= h->num_buckets)
+		hash_grow(h, 2*h->num_buckets);
+	uint32_t i = k % h->num_buckets;
+	while (h->keys[i] != k && h->keys[i] != HASH_UNUSED) {
+		i = (i + 1) % h->num_buckets;
+	}
+	if (h->keys[i] == HASH_UNUSED)
+		h->used_buckets++;
+	h->keys[i] = k;
+	h->values[i] = v;
+}
+
+void hash_test(void) {
+	Hash h = { 0 };
+	enum { N = 1024 };
+	for (int i = 1; i < N; i++)
+		hash_add(&h, i, i+1);
+	for (int i = 1; i < N; i++) {
+		uint64_t v = hash_lookup(&h, i);
+		assert(v == (uint64_t)(i+1));
+	}
+#if 0
+	for (uint32_t i = 0; i < h.num_buckets; i++)
+		printf("%llu, %llu\n", h.keys[i], h.values[i]);
+#endif
+	hash_free(&h);
+}
+
+void common_test(void) {
+	array_test();
+	hash_test();
 }
