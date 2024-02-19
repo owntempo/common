@@ -26,6 +26,11 @@ array_push(items, my_item);
 hash_add(&hash, hash_string("Something"), array_size(items)-1);
 ```
 
+### TODO
+
+* Hash functions
+* Explain some caveats about the implementation
+
 ## Dependencies
 
 ```C
