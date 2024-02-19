@@ -3,7 +3,7 @@
 ## Dynamic arrays
 
 ```C
-Type *a = NULL;
+int *a = NULL;
 array_push(a, 25);
 array_push(a, 8);
 for (uint64_t i = 0; i < array_size(a); i++)
