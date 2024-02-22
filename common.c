@@ -93,6 +93,9 @@ typedef struct Hash
 } Hash;
 
 uint64_t hash_lookup(Hash *h, uint64_t k) {
+	if (h->used_buckets == 0)
+		return HASH_UNUSED;
+
 	uint32_t i = k % h->num_buckets;
 	while (h->keys[i] != k && h->keys[i] != HASH_UNUSED)
 		i = (i + 1) % h->num_buckets;
@@ -138,6 +141,16 @@ void hash_add(Hash *h, uint64_t k, uint64_t v) {
 	h->values[i] = v;
 }
 
+uint64_t hash_bytes(const uint8_t *p, uint64_t count) {
+	// NOTE(gaurang): Fowler-Noll-Vo Hash Function [FNV-1a]
+	uint64_t hash = 0xcbf29ce484222325ULL;
+	for (uint64_t i = 0; i < count; i++) {
+		hash ^= p[i];
+		hash *= 0x00000100000001b3ULL;
+	}
+	return hash;
+}
+
 void hash_test(void) {
 	Hash h = { 0 };
 	enum { N = 1024 };
@@ -154,7 +167,62 @@ void hash_test(void) {
 	hash_free(&h);
 }
 
+// NOTE(gaurang): Intern Strings
+
+typedef struct Intern {
+	struct Intern *next;
+	size_t length;
+	char string[1];
+} Intern;
+
+Hash intern_lookup;
+Intern **intern_pool;
+
+const char *intern_string_range(const char *start, const char *end) {
+	size_t length = end - start;
+	uint64_t hash = hash_bytes((uint8_t *)start, length);
+	uint64_t i = hash_lookup(&intern_lookup, hash);
+	if (i != HASH_UNUSED) {
+		// TODO(gaurang): Should we remove this because, collisions
+		// are statistically impossible.
+		for (Intern *it = intern_pool[i]; it; it = it->next)
+			if (length == it->length && strncmp(start, it->string, length) == 0)
+				return it->string;
+	}
+	Intern *new_intern = emalloc(offsetof(Intern, string) + length + 1);
+	new_intern->length = length;
+	memcpy(new_intern->string, start, new_intern->length);
+	new_intern->string[length] = '\0';
+	if (i == HASH_UNUSED) {
+		array_push(intern_pool, new_intern);
+		hash_add(&intern_lookup, hash, array_size(intern_pool) - 1);
+	} else {
+		new_intern->next = intern_pool[i];
+		intern_pool[i] = new_intern;
+	}
+	return new_intern->string;
+}
+
+const char *intern_string(const char *s) {
+	return intern_string_range(s, s+strlen(s));
+}
+
+void intern_test(void) {
+	char a[] = "hello";
+    assert(strcmp(a, intern_string(a)) == 0);
+    assert(intern_string(a) == intern_string(a));
+    assert(intern_string(intern_string(a)) == intern_string(a));
+    char b[] = "hello";
+    assert(a != b);
+    assert(intern_string(a) == intern_string(b));
+    char c[] = "hello!";
+    assert(intern_string(a) != intern_string(c));
+    char d[] = "hell";
+    assert(intern_string(a) != intern_string(d));
+}
+
 void common_test(void) {
 	array_test();
 	hash_test();
+	intern_test();
 }
