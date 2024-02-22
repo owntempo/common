@@ -33,6 +33,17 @@ else
 	printf("Value found.\n");
 ```
 
+## String Interning
+
+```C
+const char *a = intern_string("foo");
+const char *b = intern_string("foo");
+
+// no need for strcmp()
+if (a == b)
+	return true;
+```
+
 ### TODO
 
 * Hash functions
